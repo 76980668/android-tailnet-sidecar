@@ -1,8 +1,10 @@
 module sidecar
 
-go 1.22
+go 1.23
 
-require tailscale.com v1.76.0
+require (
+    tailscale.com v1.76.0
+)
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
