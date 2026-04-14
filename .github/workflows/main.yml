@@ -1,36 +1,67 @@
-name: Build Android Sidecar
+name: build-android-sidecar
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    - name: Setup Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: 1.22
+      # =========================
+      # 1. Setup Go
+      # =========================
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
 
-    - name: Build Go Sidecar
-      run: |
-        cd go-sidecar   # ⭐⭐⭐ 强制进入目录（关键修复）
+      # =========================
+      # 2. Setup Android NDK
+      # =========================
+      - name: Setup Android NDK
+        uses: nttld/setup-android-ndk@v1
+        with:
+          ndk-version: r26d
 
-        go mod tidy
+      # =========================
+      # 3. Go mod
+      # =========================
+      - name: Go mod tidy
+        run: |
+          cd go-sidecar
+          go mod tidy
 
-        export CGO_ENABLED=1
-        export GOOS=android
-        export GOARCH=arm64
+      # =========================
+      # 4. Build CGO Android .so
+      # =========================
+      - name: Build Android shared library
+        run: |
+          cd go-sidecar
 
-        go build -buildmode=c-shared -o libproxy.so .
+          export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
+          export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: libproxy
-        path: go-sidecar/libproxy.so
+          export API=21
+          export TARGET=aarch64-linux-android
+
+          export CC=$TOOLCHAIN/bin/${TARGET}${API}-clang
+
+          export CGO_ENABLED=1
+          export GOOS=android
+          export GOARCH=arm64
+
+          go build -buildmode=c-shared -o libproxy.so .
+
+      # =========================
+      # 5. Upload artifact
+      # =========================
+      - name: Upload .so
+        uses: actions/upload-artifact@v4
+        with:
+          name: libproxy
+          path: go-sidecar/libproxy.so
