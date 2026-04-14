@@ -6,69 +6,48 @@ package main
 import "C"
 
 import (
-	"context"
-	"log"
-	"net/http"
-	"net/http/httputil"
-	"net/url"
-	"os"
-	// "unsafe"
-
+	"sync"
 	"tailscale.com/tsnet"
 )
 
-var server *tsnet.Server
+var (
+	server *tsnet.Server
+	once   sync.Once
+	authKey string
+)
 
-//export startProxy
-func startProxy(dataDir *C.char) {
-	dir := C.GoString(dataDir)
-
-	log.Println("Starting proxy, data dir:", dir)
-
-	server = &tsnet.Server{
-		Hostname: "android-sidecar",
-		Dir:      dir,
-		AuthKey:  "tskey-xxxx", // ⚠️ 换成你的
-	}
-
-	go run(server)
+//export Java_com_example_tailnet_TailnetBridge_initAuth
+func Java_com_example_tailnet_TailnetBridge_initAuth(_, key *C.char) {
+	authKey = C.GoString(key)
 }
 
-func run(s *tsnet.Server) {
-	ctx := context.Background()
+//export Java_com_example_tailnet_TailnetBridge_start
+func Java_com_example_tailnet_TailnetBridge_start(_, _ *C.char) C.int {
 
-	// 等待网络 ready
-	lc, err := s.LocalClient()
-	if err != nil {
-		log.Println("LocalClient error:", err)
-		return
-	}
-
-	st, err := lc.Status(ctx)
-	if err != nil {
-		log.Println("Status error:", err)
-		return
-	}
-
-	log.Println("Tailscale IPs:", st.Self.TailscaleIPs)
-
-	// ========= 代理目标 =========
-	target, _ := url.Parse("http://your-service.tailnet:8080")
-
-	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	http.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Proxy request:", r.URL.Path)
-		proxy.ServeHTTP(w, r)
+	once.Do(func() {
+		server = &tsnet.Server{
+			AuthKey: authKey, // ⭐ 自动登录核心
+		}
 	})
 
-	log.Println("Listening on 127.0.0.1:8081")
-
-	err = http.ListenAndServe("127.0.0.1:8081", nil)
+	err := server.Start()
 	if err != nil {
-		log.Println("HTTP error:", err)
-		os.Exit(1)
+		return -1
 	}
+
+	return 0
+}
+
+//export Java_com_example_tailnet_TailnetBridge_getIP
+func Java_com_example_tailnet_TailnetBridge_getIP(_, _ *C.char) *C.char {
+	if server == nil {
+		return C.CString("")
+	}
+	ip := server.TailscaleIPs()
+	if len(ip) == 0 {
+		return C.CString("")
+	}
+	return C.CString(ip[0].String())
 }
 
 func main() {}
