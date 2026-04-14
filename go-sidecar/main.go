@@ -13,33 +13,33 @@ import (
 var (
 	server *tsnet.Server
 	once   sync.Once
-	authKey string
+	auth   string
 )
 
-//export Java_com_example_tailnet_TailnetBridge_initAuth
-func Java_com_example_tailnet_TailnetBridge_initAuth(_, key *C.char) {
-	authKey = C.GoString(key)
+// 初始化 auth
+//export init_auth
+func init_auth(c *C.char) {
+	auth = C.GoString(c)
 }
 
-//export Java_com_example_tailnet_TailnetBridge_start
-func Java_com_example_tailnet_TailnetBridge_start(_, _ *C.char) C.int {
-
+// 启动
+//export start_sidecar
+func start_sidecar() C.int {
 	once.Do(func() {
 		server = &tsnet.Server{
-			AuthKey: authKey, // ⭐ 自动登录核心
+			AuthKey: auth,
 		}
 	})
-
 	err := server.Start()
 	if err != nil {
 		return -1
 	}
-
 	return 0
 }
 
-//export Java_com_example_tailnet_TailnetBridge_getIP
-func Java_com_example_tailnet_TailnetBridge_getIP(_, _ *C.char) *C.char {
+// 获取 IP
+//export get_ip
+func get_ip() *C.char {
 	if server == nil {
 		return C.CString("")
 	}
