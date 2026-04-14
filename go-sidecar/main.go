@@ -12,7 +12,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"unsafe"
+	// "unsafe"
 
 	"tailscale.com/tsnet"
 )
