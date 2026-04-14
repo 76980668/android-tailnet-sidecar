@@ -2,18 +2,18 @@ name: build-android-sidecar
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       # =========================
-      # 1. Setup Go
+      # Go
       # =========================
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -21,30 +21,29 @@ jobs:
           go-version: "1.22"
 
       # =========================
-      # 2. Setup Android NDK
+      # Download Android NDK (official)
       # =========================
-      - name: Setup Android NDK
-        uses: nttld/setup-android-ndk@v1
-        with:
-          ndk-version: r26d
+      - name: Install Android NDK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+
+          mkdir -p $HOME/android-sdk
+          cd $HOME/android-sdk
+
+          wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
+          unzip android-ndk-r26d-linux.zip
+
+          echo "ANDROID_NDK_HOME=$HOME/android-sdk/android-ndk-r26d" >> $GITHUB_ENV
 
       # =========================
-      # 3. Go mod
+      # Go build
       # =========================
-      - name: Go mod tidy
+      - name: Build sidecar
         run: |
           cd go-sidecar
-          go mod tidy
 
-      # =========================
-      # 4. Build CGO Android .so
-      # =========================
-      - name: Build Android shared library
-        run: |
-          cd go-sidecar
-
-          export ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
-          export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+          TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
 
           export API=21
           export TARGET=aarch64-linux-android
@@ -55,10 +54,11 @@ jobs:
           export GOOS=android
           export GOARCH=arm64
 
+          go mod tidy
           go build -buildmode=c-shared -o libproxy.so .
 
       # =========================
-      # 5. Upload artifact
+      # Upload artifact
       # =========================
       - name: Upload .so
         uses: actions/upload-artifact@v4
