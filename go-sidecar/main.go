@@ -1,40 +1,65 @@
 package main
 
+/*
+#include <stdlib.h>
+*/
+import "C"
+
 import (
+	"context"
 	"log"
-	"time"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 
 	"tailscale.com/tsnet"
 )
 
 var server *tsnet.Server
 
-//export Start
-func Start(authKey string, hostname string) int {
+//export start
+func start(user *C.char, authKey *C.char) {
+
+	u := C.GoString(user)
+	k := C.GoString(authKey)
+
+	log.Println("start tailnet:", u)
+
 	server = &tsnet.Server{
-		Hostname: hostname,
-		AuthKey:  authKey,
-		Logf:     log.Printf,
+		Hostname: "android-sidecar",
+		AuthKey:  k,
 	}
 
-	go func() {
-		for {
-			err := server.Start()
-			if err != nil {
-				log.Println("start error:", err)
-			}
-			time.Sleep(5 * time.Second)
-		}
-	}()
-
-	select {}
+	go run(server)
 }
 
-//export Stop
-func Stop() {
-	if server != nil {
-		server.Close()
+func run(s *tsnet.Server) {
+
+	lc, err := s.LocalClient()
+	if err != nil {
+		log.Println("LocalClient error:", err)
+		return
 	}
+
+	st, err := lc.Status(context.Background())
+	if err != nil {
+		log.Println("status error:", err)
+		return
+	}
+
+	log.Println("node:", st.Self.HostName)
+
+	// proxy target
+	target, _ := url.Parse("http://100.64.0.1:8080")
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		proxy.ServeHTTP(w, r)
+	})
+
+	log.Println("proxy running :8081")
+	http.ListenAndServe("127.0.0.1:8081", nil)
 }
 
 func main() {}
