@@ -1,53 +1,40 @@
 package main
 
-/*
-#include <stdlib.h>
-*/
-import "C"
-
 import (
-	"sync"
+	"log"
+	"time"
+
 	"tailscale.com/tsnet"
 )
 
-var (
-	server *tsnet.Server
-	once   sync.Once
-	auth   string
-)
+var server *tsnet.Server
 
-// 初始化 auth
-//export init_auth
-func init_auth(c *C.char) {
-	auth = C.GoString(c)
-}
+//export Start
+func Start(authKey string, hostname string) int {
+	server = &tsnet.Server{
+		Hostname: hostname,
+		AuthKey:  authKey,
+		Logf:     log.Printf,
+	}
 
-// 启动
-//export start_sidecar
-func start_sidecar() C.int {
-	once.Do(func() {
-		server = &tsnet.Server{
-			AuthKey: auth,
+	go func() {
+		for {
+			err := server.Start()
+			if err != nil {
+				log.Println("start error:", err)
+			}
+			time.Sleep(5 * time.Second)
 		}
-	})
-	err := server.Start()
-	if err != nil {
-		return -1
-	}
-	return 0
+	}()
+
+	select {}
 }
 
-// 获取 IP
-//export get_ip
-func get_ip() *C.char {
-	if server == nil {
-		return C.CString("")
+//export Stop
+func Stop() {
+	if server != nil {
+		server.Close()
 	}
-	ip := server.TailscaleIPs()
-	if len(ip) == 0 {
-		return C.CString("")
-	}
-	return C.CString(ip[0].String())
 }
 
 func main() {}
